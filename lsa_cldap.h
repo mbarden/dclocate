@@ -63,5 +63,7 @@ void lsa_cldap_close(lsa_cldap_host_t *);
 int lsa_cldap_netlogon_search(lsa_cldap_t *, lsa_cldap_host_t *,
     const char *, uint32_t);
 
+lsa_cldap_host_t *lsa_cldap_netlogon_reply(lsa_cldap_t *);
+
 #endif /* _LSA_CLDAP_H */
 
