@@ -199,21 +199,24 @@ out:
 	return (ret);
 }
 
-int
-lsa_srv_init(lsa_srv_ctx_t *ctx)
+lsa_srv_ctx_t *
+lsa_srv_init(void)
 {
-	int ret;
-	
-	memset(ctx, 0, sizeof (*ctx));
+	lsa_srv_ctx_t *ctx;
 
-	ret = res_ninit(&ctx->lsc_state);
-	if (ret != 0)
-		return (ret);
+	ctx = malloc(sizeof (*ctx));
+	if (ctx == NULL)
+		return (NULL);
+
+	if (res_ninit(&ctx->lsc_state) != 0) {
+		free(ctx);
+		return (NULL);
+	}
 
 	list_create(&ctx->lsc_list, sizeof (srv_rr_t),
 	    offsetof(srv_rr_t, sr_node));
 
-	return (0);
+	return (ctx);
 }
 
 void
