@@ -229,11 +229,12 @@ lsa_cldap_setup_pdu(BerElement *ber, const char *dname,
 	if (len >= sizeof (filter))
 		goto fail;
 
-	if (host != NULL)
+	if (host != NULL) {
 		len += snprintf(filter + len, sizeof (filter) - len,
 		    "(Host=%s)", host);
-	if (len >= sizeof (filter))
-		goto fail;
+		if (len >= sizeof (filter))
+			goto fail;
+	}
 
 	len += snprintf(filter + len, sizeof (filter) - len,
 	    "(NtVer=%s))", ntver_esc);
