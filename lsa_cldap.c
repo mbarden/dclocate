@@ -133,6 +133,8 @@ lsa_cldap_open(lsa_cldap_t *lc, const char *host, int16_t port)
 		goto fail;
 
 	lch->lch_dcinfo.DomainControllerAddress = addrp;
+
+	return (lch);
 fail:
 	if (res != NULL)
 		freeaddrinfo(res);
