@@ -23,6 +23,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <netdb.h>
 #include <lber.h>
 #include <ldap.h>
@@ -83,62 +84,81 @@ lsa_cldap_fini(lsa_cldap_t *lc)
 lsa_cldap_host_t *
 lsa_cldap_open(lsa_cldap_t *lc, const char *host, int16_t port)
 {
-	struct sockaddr 	*addrp;
-	struct sockaddr_in6	*addrp6;
 	lsa_cldap_host_t	*lch;
-	struct addrinfo		*res, *aip = NULL;
+	char			*p, *dcaddr, *dcname;
+	struct sockaddr_in6 	sa;
 
-	addrp = malloc(sizeof (struct sockaddr_storage));
-	if (addrp == NULL)
-		goto fail;
-
-	addrp6 = (struct sockaddr_in6 *)addrp;
-	addrp6->sin6_family = AF_INET6;
-	addrp6->sin6_addr = in6addr_loopback;
-	addrp6->sin6_port = htons((port == 0) ? port : LDAP_PORT);
+	sa.sin6_family = AF_INET6;
+	sa.sin6_addr = in6addr_loopback;
+	sa.sin6_port = htons((port == 0) ? port : LDAP_PORT);
 
 	/*
 	 * Attempt to resolve host if specified. Fall back to loopback.
 	 */
 	if (host != NULL) {
-		if (getaddrinfo(host, NULL, NULL, &res) != 0)
+		struct addrinfo	*res;
+		struct addrinfo	ai = {
+			AI_ADDRCONFIG | AI_V4MAPPED, AF_INET6,
+			0, 0, 0, NULL, NULL, NULL
+		};
+
+		if ((getaddrinfo(host, NULL, &ai, &res) != 0) ||
+		    (res == NULL))
 			goto fail;
 
-		for (aip = res; aip != NULL; aip = aip->ai_next) {
-			/* XXX support multiple addresses */
-			switch (aip->ai_addr->sa_family == AF_INET) {
-				case AF_INET:
-					memcpy(addrp, aip->ai_addr,
-					   sizeof (struct sockaddr_in));
-				break;
-				case AF_INET6:
-					memcpy(addrp, aip->ai_addr,
-					    sizeof (struct sockaddr_in6));
-				break;
-				default:
-					/* Unknown address family */
-					continue;
-			}
+		(void) memcpy(&sa, res->ai_addr, res->ai_addrlen);
 
-			break;
-		}
-
-		if (res != NULL) {
-			freeaddrinfo(res);
-			res = NULL;
-		}
+		freeaddrinfo(res);
 	}
 
 	if ((lch = malloc(sizeof (*lch))) == NULL)
 		goto fail;
 
-	lch->lch_dcinfo.DomainControllerAddress = addrp;
+	memset(lch, 0, sizeof (*lch));
+
+	if ((dcname = malloc(MAXHOSTNAMELEN + 3)) == NULL)
+		goto fail;
+
+	if ((dcaddr = malloc(INET6_ADDRSTRLEN + 2)) == NULL)
+		goto fail;
+
+	/*
+	 * Look up DC name; DomainControllerName is prefixed with "\\".
+	 */
+	p = strcpy(dcname, "\\\\") + 2;
+
+	if (getnameinfo((struct sockaddr *)&sa, sizeof (sa),
+	    p, MAXHOSTNAMELEN + 1, NULL, 0, NI_NAMEREQD) != 0) {
+		/*
+		 * Unable to perform reverse lookup on the name, fall back
+		 * to specified hostname if one exists, or our hostname.
+		 */
+		if (host == NULL) {
+			if (gethostname(p, MAXHOSTNAMELEN + 1) != 0)
+				goto fail;
+		} else {
+			(void) strlcpy(p, host, MAXHOSTNAMELEN + 1);
+		}
+	}
+
+	/*
+	 * Format DC address; DomainControllerAddress is prefixed with "\\".
+	 */
+	p = strcpy(dcaddr, "\\\\") + 2;
+
+	if (inet_ntop(AF_INET6, &sa.sin6_addr, p, INET6_ADDRSTRLEN) != 0)
+		goto fail;
+
+	lch->lch_dcinfo.DomainControllerName = dcname;
+	lch->lch_dcinfo.DomainControllerAddress = dcaddr;
+	lch->lch_dcinfo.DomainControllerAddressType = DS_INET_ADDRESS;
+	lch->lch_dcinfo.Flags = DS_DNS_CONTROLLER_FLAG;
 
 	return (lch);
 fail:
-	if (res != NULL)
-		freeaddrinfo(res);
-	free(addrp);
+	free(dcaddr);
+	free(dcname);
+	free(lch);
 
 	return (NULL);
 }
@@ -290,9 +310,10 @@ int
 lsa_cldap_netlogon_search(lsa_cldap_t *lc, lsa_cldap_host_t *lch,
      const char *host, uint32_t ntver)
 {
-	int ret = -1;
-	uint16_t msgid;
-	BerElement *pdu;
+	int			ret = -1;
+	uint16_t		msgid;
+	BerElement		*pdu;
+	struct sockaddr_in6 	addr;
 
 	if ((pdu = ber_alloc()) == NULL)
 		goto fail;
@@ -301,10 +322,22 @@ lsa_cldap_netlogon_search(lsa_cldap_t *lc, lsa_cldap_host_t *lch,
 	    host, ntver);
 
 	/*
+	 * Convert DC address. Port is actually fixed as per MS-CLDAP spec.
+	 */
+	addr.sin6_family = AF_INET6;
+	addr.sin6_port = LDAP_PORT;
+
+	if (strlen(lch->lch_dcinfo.DomainControllerAddress) < 2)
+		goto fail;
+
+	if (inet_pton(AF_INET6, lch->lch_dcinfo.DomainControllerAddress + 2,
+		&addr.sin6_addr) != 1)
+		goto fail;
+
+	/*
 	 * Send the PDU to the host
 	 */
-	if (lsa_cldap_send_pdu(lc, pdu,
-	    lch->lch_dcinfo.DomainControllerAddress))
+	if (lsa_cldap_send_pdu(lc, pdu, (struct sockaddr *)&addr));
 		goto fail;
 
 	lch->lch_lastping = gethrtime();

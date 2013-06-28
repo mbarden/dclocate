@@ -20,16 +20,16 @@
 #include <sys/list.h>
 
 typedef struct _DOMAIN_CONTROLLER_INFO {
-	const char	*DomainControllerName;
-	struct sockaddr	*DomainControllerAddress;
+	char		*DomainControllerName;
+	char		*DomainControllerAddress;
+	unsigned long	DomainControllerAddressType;
 	uint8_t		DomainGuid[16];
-	const char	*DomainName;
-	const char	*DnsForestName;
-	uint32_t	Flags;
-	const char	*DcSiteName;
-	const char	*ClientSiteName;
+	char		*DomainName;
+	char		*DnsForestName;
+	unsigned long	Flags;
+	char		*DcSiteName;
+	char		*ClientSiteName;
 } DOMAIN_CONTROLLER_INFO;
-
 
 typedef struct lsa_cldap
 {
@@ -44,6 +44,26 @@ typedef struct lsa_cldap_host
 	uint16_t		lch_lastmsg;
 	DOMAIN_CONTROLLER_INFO	lch_dcinfo;
 } lsa_cldap_host_t;
+
+#define DS_INET_ADDRESS		0x0001
+#define DS_NETBIOS_ADDRESS	0x0002
+
+#define DS_PDC_FLAG		0x00000001	/* DC is PDC of domain */
+#define DS_GC_FLAG		0x00000004	/* DC is GC server for forest */
+#define DS_LDAP_FLAG		0x00000008	/* LDAP server */
+#define DS_DS_FLAG		0x00000010	/* DC is DS server for domain */
+#define DS_KDC_FLAG		0x00000020	/* DC is KDC for domain */
+#define DS_TIMESERV_FLAG	0x00000040	/* DC has time service */
+#define DS_CLOSEST_FLAG		0x00000080	/* DC in same site as client */
+#define DS_WRITABLE_FLAG	0x00000100	/* Writable directory service */
+#define DS_GOOD_TIMESERV_FLAG	0x00000200	/* Time service is reliable */
+#define DS_NDNC_FLAG		0x00000400	/* Name context not a domain */
+#define DS_SELECT_SECRET_DOMAIN_6_FLAG	0x00000800	/* Read-only W2k8 DC */
+#define DS_FULL_SECRET_DOMAIN_6_FLAG	0x00001000	/* Writable W2k8 DC */
+#define DS_PING_FLAGS		0x0000ffff	/* Flags returned on ping */
+#define DS_DNS_CONTROLLER_FLAG	0x20000000	/* DC name is DNS format */
+#define DS_DNS_DOMAIN_FLAG	0x40000000	/* Domain name is DNS format */
+#define DS_DNS_FOREST_FLAG	0x80000000	/* Forest name is DNS format */
 
 #define NETLOGON_ATTR_NAME			"NetLogon"
 #define NETLOGON_NT_VERSION_1			0x00000001
