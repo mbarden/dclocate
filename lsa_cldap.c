@@ -30,13 +30,8 @@
 
 #include "lsa_cldap.h"
 
-extern int ldap_put_filter(BerElement *ber, char *);
 
-struct _berelement {
-	char	*ber_buf;
-	char	*ber_ptr;
-	char	*ber_end;
-};
+extern int ldap_put_filter(BerElement *ber, char *);
 
 lsa_cldap_t *
 lsa_cldap_init()
@@ -44,7 +39,7 @@ lsa_cldap_init()
 	int			fd;
 	lsa_cldap_t		*lc;
 	struct sockaddr_in6 	addr;
-
+	
 	if ((fd = socket(PF_INET6, SOCK_DGRAM, 0)) < 0)
 		return (NULL);
 	/*
@@ -81,6 +76,7 @@ lsa_cldap_fini(lsa_cldap_t *lc)
 	free(lc);
 }
 
+// It doesn't look like lc is used at all?
 lsa_cldap_host_t *
 lsa_cldap_open(lsa_cldap_t *lc, const char *host, int16_t port)
 {
@@ -89,8 +85,8 @@ lsa_cldap_open(lsa_cldap_t *lc, const char *host, int16_t port)
 	struct sockaddr_in6 	sa;
 
 	sa.sin6_family = AF_INET6;
-	sa.sin6_addr = in6addr_loopback;
-	sa.sin6_port = htons((port == 0) ? port : LDAP_PORT);
+	sa.sin6_addr = in6addr_any; //in6addr_loopback
+	sa.sin6_port = htons((port == 0) ? port : LDAP_PORT); /* ??? should this be reversed?*/
 
 	/*
 	 * Attempt to resolve host if specified. Fall back to loopback.
@@ -123,7 +119,7 @@ lsa_cldap_open(lsa_cldap_t *lc, const char *host, int16_t port)
 		goto fail;
 
 	/*
-	 * Look up DC name; DomainControllerName is prefixed with "\\".
+ 	 * Look up DC name; DomainControllerName is prefixed with "\\".
 	 */
 	p = strcpy(dcname, "\\\\") + 2;
 
@@ -213,7 +209,7 @@ lsa_cldap_escape_le64(char *buf, uint64_t val, int bytes)
  *          attributes    SEQUENCE OF AttributeType
  *  }
  */
-static int
+int
 lsa_cldap_setup_pdu(BerElement *ber, const char *dname,
     const char *host, uint32_t ntver)
 {
@@ -255,7 +251,7 @@ lsa_cldap_setup_pdu(BerElement *ber, const char *dname,
 		if (len >= sizeof (filter))
 			goto fail;
 	}
-
+	
 	len += snprintf(filter + len, sizeof (filter) - len,
 	    "(NtVer=%s))", ntver_esc);
 	if (len >= sizeof (filter))
@@ -295,7 +291,7 @@ lsa_cldap_send_pdu(lsa_cldap_t *lc, BerElement *pdu,
 	return (sendto(lc->lc_sock, be->ber_buf,
 	   (size_t)(be->ber_end - be->ber_buf), 0, addr, addrlen));
 }
-
+/* XXX */
 static ssize_t
 lsa_cldap_recv_pdu(lsa_cldap_t *lc, BerElement *pdu,
     struct sockaddr *addr, socklen_t *addrlenp)
@@ -378,6 +374,141 @@ fail:
  *         resultCode     [APPLICATION 5] LDAPResult
  *    }
  */
+
+static int
+lsa_decode_name(uchar_t *base, uchar_t *cp, char *str)
+{
+	uchar_t *tmp = NULL, *st = cp;
+	uint8_t len;
+
+  /* 
+   * there should probably be some boundary checks on str && cp
+   * maybe pass in strlen && msglen ?
+   */
+	while (*cp != 0) {
+		if (*cp = 0xc0) {
+			if (tmp != NULL)
+				tmp = cp + 2;
+			cp = base + *(cp+1); 
+		}
+		for (len = *cp++; len > 0; len--)
+			*str++ = *cp++;
+		*str++ = '.';
+	}
+	if (cp != st)
+		*(str-1) = 0;
+	else
+		*str = 0;
+	
+	return ((tmp == NULL ? cp+1 : tmp) - st);
+}
+
+
+int
+lsa_cldap_parse(BerElement *ber, DOMAIN_CONTROLLER_INFO *dci)
+{ 
+	uchar_t *base, *cp = NULL, *tmp = NULL;
+	char val[512]; /* how big should val be? */
+	int l, i, msgid, rc = 0;
+	uint16_t opcode;
+	uint8_t *gid = dci->DomainGuid, *pt;
+	field_5ex_t f = OPCODE;
+	
+
+	if (ber_scanf(ber, "{i{{x{", &msgid) == LBER_ERROR) { /* later, compare msgid's? */
+		rc = 1;
+		goto out;
+	}
+	
+	if (ber_scanf(ber, "{x[la", &l, &cp) == LBER_ERROR) {
+		rc = 1;
+		goto out;
+	}
+	
+	for(base = cp; ((cp - base) < l) && (f <= LM_20_TOKEN); f++) {
+	  
+	  	switch(f) {
+		case OPCODE:
+			opcode = *(uint16_t *)cp;
+			cp +=2;
+			break;
+		case SBZ:
+			cp +=2;
+			break;
+		case FLAGS:
+			dci->Flags = *(uint32_t *)cp;
+			cp +=4;
+			break;
+		case DOMAIN_GUID:
+			for(i = 0; i < 16; i++)
+				gid[i] = *cp++;
+			break;
+		case FOREST_NAME:
+			cp += lsa_decode_name(base, cp, val);
+			if ((dci->DnsForestName = strdup(val)) == NULL) {
+				rc = 2;
+				goto out;
+			}
+			break;
+		case DNS_DOMAIN_NAME:
+			cp += lsa_decode_name(base, cp, val);
+			if ((dci->DomainName = strdup(val)) == NULL) {
+				rc = 2;
+				goto out;
+			}
+			break;
+		case DNS_HOST_NAME:
+			cp += lsa_decode_name(base, cp, val);
+			if (((strncpy(dci->DomainControllerName, "\\\\", 2)) == NULL) ||
+			    (strcat(dci->DomainControllerName, val) == NULL)) {
+				rc = 2;
+				goto out;
+			}
+			break;
+		case NET_DOMAIN_NAME:
+			cp += lsa_decode_name(base, cp, val); /* DCI doesn't seem to use this */
+			break;
+		case NET_COMP_NAME:
+			cp += lsa_decode_name(base, cp, val); /* DCI doesn't seem to use this */
+			break;
+		case USER_NAME:
+			cp += lsa_decode_name(base, cp, val); /* DCI doesn't seem to use this */
+			break;
+		case DC_SITE_NAME:
+			cp += lsa_decode_name(base, cp, val);
+			if ((dci->DcSiteName = strdup(val)) == NULL) {
+				rc = 2;
+				goto out;
+			}
+			break;
+		case CLIENT_SITE_NAME:
+			cp += lsa_decode_name(base, cp, val);
+			if (((dci->DcSiteName = strdup(val)) == NULL) && (val[0] != '\0')) {
+				rc = 2;
+				goto out;
+			}
+			break;
+		/*
+		 * These are all possible, but we don't really care about them.
+		 * Sockaddr_size && sockaddr might be useful at some point
+		 */
+		case SOCKADDR_SIZE:
+		case SOCKADDR:
+		case NEXT_CLOSEST_SITE_NAME:
+		case NTVER:
+		case LM_NT_TOKEN:
+		case LM_20_TOKEN:
+			break;
+		default:
+			rc = 3;
+			goto out;
+		}
+	}
+	
+ out:
+	return (rc);
+}
+
 lsa_cldap_host_t *
 lsa_cldap_netlogon_reply(lsa_cldap_t *lc)
 {
@@ -395,7 +526,7 @@ lsa_cldap_netlogon_reply(lsa_cldap_t *lc)
 	/*
 	 * Decode CLDAPMessage only.
 	 */
-	if (ber_scanf(ber, "{i{", &msgid) == LBER_ERROR);
+	if (ber_scanf(ber, "{i{", &msgid) == LBER_ERROR)
 		goto fail;
 
 	/*

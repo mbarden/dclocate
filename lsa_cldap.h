@@ -45,6 +45,12 @@ typedef struct lsa_cldap_host
 	DOMAIN_CONTROLLER_INFO	lch_dcinfo;
 } lsa_cldap_host_t;
 
+struct _berelement {
+	char	*ber_buf;
+	char	*ber_ptr;
+	char	*ber_end;
+};
+
 #define DS_INET_ADDRESS		0x0001
 #define DS_NETBIOS_ADDRESS	0x0002
 
@@ -73,6 +79,27 @@ typedef struct lsa_cldap_host
 #define NETLOGON_NT_VERSION_WITH_CLOSEST_SITE	0x00000010
 #define NETLOGON_NT_VERSION_AVOID_NT4EMUL	0x01000000
 
+typedef enum {
+	OPCODE = 0,
+	SBZ,
+	FLAGS,
+	DOMAIN_GUID,
+	FOREST_NAME,
+	DNS_DOMAIN_NAME,
+	DNS_HOST_NAME,
+	NET_DOMAIN_NAME,
+	NET_COMP_NAME,
+	USER_NAME,
+	DC_SITE_NAME,
+	CLIENT_SITE_NAME,
+	SOCKADDR_SIZE,
+	SOCKADDR,
+	NEXT_CLOSEST_SITE_NAME,
+	NTVER,
+	LM_NT_TOKEN,
+	LM_20_TOKEN
+} field_5ex_t;
+
 lsa_cldap_t *lsa_cldap_init(void);
 
 void lsa_cldap_fini(lsa_cldap_t *);
@@ -84,6 +111,8 @@ int lsa_cldap_netlogon_search(lsa_cldap_t *, lsa_cldap_host_t *,
     const char *, uint32_t);
 
 lsa_cldap_host_t *lsa_cldap_netlogon_reply(lsa_cldap_t *);
+
+int lsa_cldap_parse(BerElement *, DOMAIN_CONTROLLER_INFO *);
 
 #endif /* _LSA_CLDAP_H */
 

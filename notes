@@ -1,0 +1,22 @@
+1. dns query "srv" domain (list)
+#print
+2. parse/sort list into order we'll try "candidates" (insertion sort)
+#print
+3. create udp endpoint (two if ipv6)
+#print events
+   while poll endpoints - (100 ms delay)
+   if nothing recieved, send ldap ping to next candidate
+
+set dns server to smb server
+
+_ldap._tcp.dc._msdcs.fqdn
+dsgetdcname	
+
+
+sendto
+poll
+recievefrom
+bind (port, addr = 0)
+libldap
+getsockname
+getpeername

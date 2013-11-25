@@ -44,10 +44,23 @@ int main(int argc, char **argv)
 	while ((sr = lsa_srv_next(ctx, sr)) != NULL)
 	{
 		printf("target %s:%" PRIu16
+		    ", pri %" PRIu16 ", weight %" PRIu16 " %d\n",
+		       sr->sr_name, sr->sr_port, sr->sr_priority, sr->sr_weight, sr->addr.sin6_addr);
+	}
+	/*
+	printf("sorting...\n");
+
+	lsa_srvlist_sort(ctx);
+
+	while ((sr = lsa_srv_next(ctx, sr)) != NULL)
+	{
+		printf("target %s:%" PRIu16
 		    ", pri %" PRIu16 ", weight %" PRIu16 "\n",
 		    sr->sr_name, sr->sr_port, sr->sr_priority, sr->sr_weight);
 	}
-
+	*/
+	
 	lsa_srv_fini(ctx);
+	
 	return (0);
 }

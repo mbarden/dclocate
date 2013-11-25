@@ -19,6 +19,17 @@
 #include <sys/list.h>
 #include <resolv.h>
 
+#define P_SUCCESS 0
+#define P_ERR_SKIP 1 /* ignored a record - continue parsing */
+#define P_ERR_FAIL -1 /* parsing failed */
+
+typedef struct addr_rr
+{
+	list_node_t	addr_node;
+	char		*name;
+	in6_addr_t	*addr;
+} addr_rr_t;
+
 typedef struct srv_rr
 {
 	list_node_t	sr_node;
@@ -27,6 +38,7 @@ typedef struct srv_rr
 	uint16_t	sr_port;
 	uint16_t	sr_priority;
 	uint16_t	sr_weight;
+	struct sockaddr_in6 addr;
 } srv_rr_t;
 
 typedef struct lsa_srv_ctx
@@ -34,6 +46,8 @@ typedef struct lsa_srv_ctx
 	struct __res_state	lsc_state;
 	list_t			lsc_list;
 } lsa_srv_ctx_t;
+
+void lsa_srvlist_sort(lsa_srv_ctx_t *ctx);
 
 lsa_srv_ctx_t *lsa_srv_init(void);
 
