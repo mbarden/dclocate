@@ -73,7 +73,7 @@ dc_locate(const char *dname)
 			ber_free(ret, 1);
 			goto fail;
 		}
-
+		dci->DomainControllerName = dcname;
 		if ((r = lsa_cldap_parse(ret, dci)) == 0)
 			break;
 		ber_free(ret, 1);

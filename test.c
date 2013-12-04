@@ -1,7 +1,9 @@
+#include <ldap.h>
 #include <resolv.h>
 #include <netinet/in.h>
 #include <arpa/nameser.h>
 #include <stdio.h>
+#include <netdb.h>
 #include "lsa_cldap.h"
 
 int main(int argc, char *argv[]){
@@ -22,7 +24,7 @@ int main(int argc, char *argv[]){
   char *rbe = re->ber_buf;
   while((c = getchar()) != EOF)
     rbe[i++] = c;
-
+  dci->DomainControllerName = malloc(MAXHOSTNAMELEN + 3);
   r = lsa_cldap_parse(ret, dci);
 
   printf("%d\n",r);
@@ -45,7 +47,7 @@ int main(int argc, char *argv[]){
     printf("%x", *(dci->DomainGuid+i) & 0xff);
   printf("\n");
   printf("DomainName: %s\n", dci->DomainName);
-  printf("DnsForestName: %s\n", dci->DomainControllerName);
+  printf("DnsForestName: %s\n", dci->DnsForestName);
   printf("Flags: 0x%lx\n", dci->Flags);
   printf("DcSiteName: %s\n", dci->DcSiteName);
   printf("ClientSiteName: %s\n", dci->ClientSiteName);

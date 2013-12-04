@@ -393,7 +393,7 @@ lsa_decode_name(uchar_t *base, uchar_t *cp, char *str)
    */
 	while (*cp != 0) {
 		if (*cp == 0xc0) {
-			if (tmp != NULL)
+			if (tmp == NULL)
 				tmp = cp + 2;
 			cp = base + *(cp+1); 
 		}
@@ -413,25 +413,14 @@ lsa_decode_name(uchar_t *base, uchar_t *cp, char *str)
 int
 lsa_cldap_parse(BerElement *ber, DOMAIN_CONTROLLER_INFO *dci)
 { 
-	uchar_t *base, *cp = NULL, *tmp = NULL;
+	uchar_t *base = NULL, *cp = NULL, *tmp = NULL;
 	char val[512]; /* how big should val be? */
 	int l, i, msgid, rc = 0;
 	uint16_t opcode;
 	uint8_t *gid = dci->DomainGuid, *pt;
 	field_5ex_t f = OPCODE;
 	
-	/* later, compare msgid's? */
-	/*
-	if (ber_scanf(ber, "{i{{x{", &msgid) == LBER_ERROR) { 
-		rc = 1;
-		goto out;
-	}
-	
-	if (ber_scanf(ber, "{x[la", &l, &cp) == LBER_ERROR) {
-		rc = 1;
-		goto out;
-	}
-	*/
+	/* later, compare msgid's/some validation? */
 
 	if (ber_scanf(ber, "{i{x{{x[la", &msgid, &l, &cp) == LBER_ERROR) {
 		rc = 1;
@@ -440,6 +429,7 @@ lsa_cldap_parse(BerElement *ber, DOMAIN_CONTROLLER_INFO *dci)
 
 	for(base = cp; ((cp - base) < l) && (f <= LM_20_TOKEN); f++) {
 	  
+		memset(val, 0, sizeof (val));
 	  	switch(f) {
 		case OPCODE:
 			opcode = *(uint16_t *)cp;
@@ -504,7 +494,7 @@ lsa_cldap_parse(BerElement *ber, DOMAIN_CONTROLLER_INFO *dci)
 			break;
 		case CLIENT_SITE_NAME:
 			cp += lsa_decode_name(base, cp, val);
-			if (((dci->DcSiteName = strdup(val)) == NULL) && (val[0] != '\0')) {
+			if (((dci->ClientSiteName = strdup(val)) == NULL) && (val[0] != '\0')) {
 				rc = 2;
 				goto out;
 			}
@@ -527,6 +517,10 @@ lsa_cldap_parse(BerElement *ber, DOMAIN_CONTROLLER_INFO *dci)
 	}
 	
  out:
+	if (base)
+		free(base);
+	else if (cp)
+		free(cp);
 	return (rc);
 }
 
