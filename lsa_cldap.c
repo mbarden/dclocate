@@ -228,11 +228,17 @@ lsa_cldap_setup_pdu(BerElement *ber, const char *dname,
 	/*
 	 * Encode CLDAPMessage and beginning of SearchRequest sequence.
 	 */
+	/*
 	if (ber_printf(ber, "{ist{seeiib", msgid, ldapdn,
 	    LDAP_REQ_SEARCH, basedn, scope, deref,
 		sizelimit, timelimit, attrsonly) < 0)
 		goto fail;
-	
+	*/
+	if (ber_printf(ber, "{it{seeiib", msgid,
+	    LDAP_REQ_SEARCH, basedn, scope, deref,
+		sizelimit, timelimit, attrsonly) < 0)
+		goto fail;
+
 	/*
 	 * Format NtVer as little-endian with LDAPv3 escapes.
 	 */
@@ -386,7 +392,7 @@ lsa_decode_name(uchar_t *base, uchar_t *cp, char *str)
    * maybe pass in strlen && msglen ?
    */
 	while (*cp != 0) {
-		if (*cp = 0xc0) {
+		if (*cp == 0xc0) {
 			if (tmp != NULL)
 				tmp = cp + 2;
 			cp = base + *(cp+1); 
@@ -414,8 +420,9 @@ lsa_cldap_parse(BerElement *ber, DOMAIN_CONTROLLER_INFO *dci)
 	uint8_t *gid = dci->DomainGuid, *pt;
 	field_5ex_t f = OPCODE;
 	
-
-	if (ber_scanf(ber, "{i{{x{", &msgid) == LBER_ERROR) { /* later, compare msgid's? */
+	/* later, compare msgid's? */
+	/*
+	if (ber_scanf(ber, "{i{{x{", &msgid) == LBER_ERROR) { 
 		rc = 1;
 		goto out;
 	}
@@ -424,7 +431,13 @@ lsa_cldap_parse(BerElement *ber, DOMAIN_CONTROLLER_INFO *dci)
 		rc = 1;
 		goto out;
 	}
-	
+	*/
+
+	if (ber_scanf(ber, "{i{x{{x[la", &msgid, &l, &cp) == LBER_ERROR) {
+		rc = 1;
+		goto out;
+	}
+
 	for(base = cp; ((cp - base) < l) && (f <= LM_20_TOKEN); f++) {
 	  
 	  	switch(f) {
@@ -440,8 +453,16 @@ lsa_cldap_parse(BerElement *ber, DOMAIN_CONTROLLER_INFO *dci)
 			cp +=4;
 			break;
 		case DOMAIN_GUID:
-			for(i = 0; i < 16; i++)
+			for (i = 0; i < 16; i++)
 				gid[i] = *cp++;
+			/*
+			for (i = 0; i < 4; i++)
+				*gid++ = *cp++;
+				*/
+			/*
+			for (i = 7; i >= 0; i--)
+				gid[i] = *cp++;
+			*/
 			break;
 		case FOREST_NAME:
 			cp += lsa_decode_name(base, cp, val);

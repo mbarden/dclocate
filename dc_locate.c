@@ -6,6 +6,8 @@
 #include "lsa_cldap.h"
 #include "lsa_srv.h"
 #include <stdio.h>
+#include <errno.h>
+
 DOMAIN_CONTROLLER_INFO *
 dc_locate(const char *dname)
 {
@@ -19,6 +21,7 @@ dc_locate(const char *dname)
  	DOMAIN_CONTROLLER_INFO *dci = NULL;
 	int r, msgid;
 	struct sockaddr_storage addr;
+	struct sockaddr_in6 *paddr = (struct sockaddr_in6 *)&addr;
 	socklen_t addrlen;
 	char *dcaddr = NULL, *dcname = NULL;
 
@@ -48,15 +51,15 @@ dc_locate(const char *dname)
 
 	if ((dcaddr = malloc(INET6_ADDRSTRLEN + 2)) == NULL)
 		goto fail;
+
 	if ((dcname = malloc(MAXHOSTNAMELEN + 3)) == NULL)
 		goto fail;
 
-	goto fail;
 	be = (struct _berelement *)pdu;
 	while((sr = lsa_srv_next(ctx, sr)) != NULL) {
 		r = sendto(lc->lc_sock, be->ber_buf, (size_t)(be->ber_end - be->ber_buf),
 		       0, (struct sockaddr *)&sr->addr, sizeof(sr->addr));
-		printf( "%d\n", r);
+		printf("%d\n",r);
 		if(poll(&pingchk, 1, 100) == 0)
 			continue;
 		if ((ret = ber_alloc()) == NULL)
@@ -85,7 +88,11 @@ dc_locate(const char *dname)
 
 	if(strncpy(dcaddr, "\\\\", 2) == NULL)
 		goto fail;
-	inet_ntop(sr->addr.sin6_family, &sr->addr.sin6_addr, dcaddr+2, INET6_ADDRSTRLEN);
+
+	
+	/*sr->addr isn't guaranteed to be correct - get it from elsewhere*/
+	inet_ntop(paddr->sin6_family, &paddr->sin6_addr, dcaddr+2, INET6_ADDRSTRLEN);
+	/*inet_ntop(sr->addr.sin6_family, &sr->addr.sin6_addr, dcaddr+2, INET6_ADDRSTRLEN);*/
 	dci->DomainControllerAddress = dcaddr;
 	dci->DomainControllerAddressType = DS_INET_ADDRESS;
 
@@ -97,6 +104,8 @@ dc_locate(const char *dname)
  fail:
 	if (ctx)
 		lsa_srv_fini(ctx);
+	if (lc)
+		lsa_cldap_fini(lc);
 	if (dcaddr)
 		free(dcaddr);
 	if (dcname)

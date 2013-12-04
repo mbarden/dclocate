@@ -155,34 +155,32 @@ lsa_parse_a(const uchar_t *msg, const uchar_t *eom, uchar_t **cp,
 	    uchar_t *namebuf, addr_rr_t *ar)
 {
 	int i;
-	in_addr_t addr = 0;
-	uint8_t *a6, *a4;
-	uint16_t *addr6 = NULL; /* inet_pton uses uint16_t addr[8], so I just modeled that */
+	uint8_t *addr6 = NULL; /* inet_pton uses uint16_t addr[8], so I just modeled that */
 	
 	if ((ar->name = strdup(namebuf)) == NULL)
 		return P_ERR_FAIL;
 	
 	if ((addr6 = malloc(sizeof (in6_addr_t))) == NULL)
 		return P_ERR_FAIL;
-	
 	memset(addr6, 0, 10);
-	
+	/*	
 	for (i = 0; i < 4; i++)
 		addr = (addr << 8) | (uint8_t) *(*cp)++;
-	
+	*/
 	if (*cp > eom) {
 		free(addr6);
 		return P_ERR_FAIL;
 	}
 	
-	*(addr6+5) = (uint16_t) 0xffff;
-	a6 =(uint8_t *) addr6+6;
-	a4 =(uint8_t *) &addr;
+	*(addr6+10) = (uint8_t) 0xff;
+	*(addr6+11) = (uint8_t) 0xff;
 	for(i = 0; i < 4; i++)
-		a6[0] = a4[0];
-	/*  *((uint32_t *)addr6+6) = addr;*/
+	  *(addr6+12+i) = (uint8_t) *(*cp)++;
 	ar->addr = (in6_addr_t *)addr6;
-	
+
+	char test[INET6_ADDRSTRLEN];
+	inet_ntop(AF_INET6, ar->addr, test, INET6_ADDRSTRLEN);
+
 	return P_SUCCESS;
 } 
 
@@ -387,7 +385,7 @@ lsa_srv_lookup(lsa_srv_ctx_t *ctx, const char *svcname, const char *dname)
 	for (sr = list_head(&ctx->lsc_list); sr != NULL; sr = list_next(&ctx->lsc_list, sr)) {
 		addr_rr_t *ar = NULL;
 		sr->addr.sin6_family = AF_INET6;
-		sr->addr.sin6_port = LDAP_PORT;
+		sr->addr.sin6_port = htons(LDAP_PORT);
 		for (ar = list_head(&la); ar != NULL; ar = list_next(&la, ar))
 			if (strcmp(sr->sr_name, ar->name) == 0) {
 				sr->addr.sin6_addr = *ar->addr;
