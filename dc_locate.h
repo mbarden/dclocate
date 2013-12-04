@@ -2,6 +2,6 @@
 #define _DC_LOC_H
 
 #include "lsa_cldap.h"
-DOMAIN_CONTROLLER_INFO * dc_locate(const char *);
+DOMAIN_CONTROLLER_INFO * dc_locate(const char *, const char *);
 
 #endif /* _DC_LOC_H */

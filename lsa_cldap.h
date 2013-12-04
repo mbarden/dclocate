@@ -31,20 +31,6 @@ typedef struct _DOMAIN_CONTROLLER_INFO {
 	char		*ClientSiteName;
 } DOMAIN_CONTROLLER_INFO;
 
-typedef struct lsa_cldap
-{
-	int	lc_sock;
-	list_t	lc_hostlist;
-} lsa_cldap_t;
-
-typedef struct lsa_cldap_host
-{
-	list_node_t		lch_node;
-	hrtime_t		lch_lastping;
-	uint16_t		lch_lastmsg;
-	DOMAIN_CONTROLLER_INFO	lch_dcinfo;
-} lsa_cldap_host_t;
-
 struct _berelement {
 	char	*ber_buf;
 	char	*ber_ptr;
@@ -100,19 +86,9 @@ typedef enum {
 	LM_20_TOKEN
 } field_5ex_t;
 
-lsa_cldap_t *lsa_cldap_init(void);
-
-void lsa_cldap_fini(lsa_cldap_t *);
-
-lsa_cldap_host_t *lsa_cldap_open(lsa_cldap_t *, const char *, int16_t);
-void lsa_cldap_close(lsa_cldap_host_t *);
-
-int lsa_cldap_netlogon_search(lsa_cldap_t *, lsa_cldap_host_t *,
-    const char *, uint32_t);
-
-lsa_cldap_host_t *lsa_cldap_netlogon_reply(lsa_cldap_t *);
+int lsa_cldap_setup_pdu(BerElement *ber, const char *dname, 
+    const char *host, uint32_t ntver);
 
 int lsa_cldap_parse(BerElement *, DOMAIN_CONTROLLER_INFO *);
 
 #endif /* _LSA_CLDAP_H */
-

@@ -3,17 +3,19 @@
 
 int main(int argc, char *argv[]) {
   DOMAIN_CONTROLLER_INFO *dci;
+  int i;
 
-  if (argc < 2) {
-    printf("usage: ./a.out dname\n");
+  if (argc < 3) {
+    printf("usage: ./a.out prefix dname\n");
     return 0;
   }
 
-  dci = dc_locate(argv[1]);
+  dci = dc_locate(argv[1], argv[2]);
+
   if (dci != NULL) {
  printf("DomainControllerName: %s\n", dci->DomainControllerName);
   printf("DomainControllerAddress: %s\n", dci->DomainControllerAddress);
-  printf("DomainControllerAddressType: %l\n", dci->DomainControllerAddressType);
+  printf("DomainControllerAddressType: %d\n", dci->DomainControllerAddressType);
   printf("DomainGuid: ");
   printf("%x", *((unsigned int *)dci->DomainGuid));
   printf("-");
@@ -34,5 +36,6 @@ int main(int argc, char *argv[]) {
   printf("DcSiteName: %s\n", dci->DcSiteName);
   printf("ClientSiteName: %s\n", dci->ClientSiteName);
   }
+
   return 0;
 }

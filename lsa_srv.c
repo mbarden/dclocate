@@ -30,18 +30,13 @@
 #include "lsa_srv.h"
 
 /*
-static void
-lsa_srvlist_insert(list_t *l, srv_rr_t *rr)
-{
-	list_insert_tail(l, rr);
-}
-
 static int
 lsa_srvsr_compare(srv_rr_t *ar, srv_rr_t *br)
 {
   return (ar->sr_priority < br->sr_priority);
 }
 */
+
 static void
 lsa_srvlist_insert(list_t *l, srv_rr_t *rr)
 {
@@ -66,9 +61,9 @@ lsa_addrlist_destroy(list_t *l)
 	addr_rr_t *ar;
 	
 	for (ar = list_head(l); ar != NULL; ar = list_head(l)) {
-	  free(ar->name);
-	  free(ar->addr);
-	  list_remove_head(l);
+		free(ar->name);
+		free(ar->addr);
+		list_remove_head(l);
 	}
 }
 
@@ -82,31 +77,7 @@ lsa_srvlist_destroy(list_t *l)
 		list_remove_head(l);
 	}
 }
-/*
-void
-lsa_srvlist_sort(lsa_srv_ctx_t *ctx)
-{
-	srv_rr_t *rr, *sr;
 
-	list_t *l, *ctxl = &ctx->lsc_list;
-
-
-	list_create(&ctx->lsc_list, sizeof (srv_rr_t),
-	    offsetof(srv_rr_t, sr_node));
-		
-	l = &ctx->lsc_list;
-	for (rr = list_head(ctxl); rr != NULL; rr = list_next(ctxl,rr)) {
-		for (sr = list_tail(l); sr != NULL; sr = list_prev(l, sr)) {
-			if (lsa_srvsr_compare(sr, rr))
-				list_insert_after(l, sr, rr);
-		}
-		list_insert_head(l, rr);
-	}
-	lsa_srvlist_destroy(ctxl);
-	list_destroy(ctxl);
-
-}
-*/
 /*
  * Parse SRV record into a srv_rr_t.
  * Returns a pointer to the next record on success, NULL on failure.
@@ -148,14 +119,16 @@ lsa_parse_srv(const uchar_t *msg, const uchar_t *eom, uchar_t **cp,
 	return P_SUCCESS;
 }
 
-/* parse A record into a v4-mapped IPv6 address */
+/* 
+ * Parse A record into a v4-mapped IPv6 address.
+ */
 
 static int
 lsa_parse_a(const uchar_t *msg, const uchar_t *eom, uchar_t **cp,
 	    uchar_t *namebuf, addr_rr_t *ar)
 {
 	int i;
-	uint8_t *addr6 = NULL; /* inet_pton uses uint16_t addr[8], so I just modeled that */
+	uint8_t *addr6 = NULL;
 	
 	if ((ar->name = strdup(namebuf)) == NULL)
 		return P_ERR_FAIL;
@@ -163,23 +136,18 @@ lsa_parse_a(const uchar_t *msg, const uchar_t *eom, uchar_t **cp,
 	if ((addr6 = malloc(sizeof (in6_addr_t))) == NULL)
 		return P_ERR_FAIL;
 	memset(addr6, 0, 10);
-	/*	
-	for (i = 0; i < 4; i++)
-		addr = (addr << 8) | (uint8_t) *(*cp)++;
-	*/
+
+	*(addr6+10) = (uint8_t) 0xff;
+	*(addr6+11) = (uint8_t) 0xff;
+	for(i = 0; i < 4; i++)
+		*(addr6+12+i) = (uint8_t) *(*cp)++;
+
 	if (*cp > eom) {
 		free(addr6);
 		return P_ERR_FAIL;
 	}
-	
-	*(addr6+10) = (uint8_t) 0xff;
-	*(addr6+11) = (uint8_t) 0xff;
-	for(i = 0; i < 4; i++)
-	  *(addr6+12+i) = (uint8_t) *(*cp)++;
-	ar->addr = (in6_addr_t *)addr6;
 
-	char test[INET6_ADDRSTRLEN];
-	inet_ntop(AF_INET6, ar->addr, test, INET6_ADDRSTRLEN);
+	ar->addr = (in6_addr_t *)addr6;
 
 	return P_SUCCESS;
 } 
@@ -189,7 +157,7 @@ lsa_parse_aaaa(const uchar_t *msg, const uchar_t *eom, uchar_t **cp,
 	       uchar_t *namebuf, addr_rr_t *ar)
 {
 	int i;
-	uint16_t *addr6 = NULL; /* inet_pton uses uint16_t addr[8], so I just modeled that */
+	uint16_t *addr6 = NULL;
 	
 	if ((ar->name = strdup(namebuf)) == NULL)
 		return P_ERR_FAIL;
@@ -215,7 +183,7 @@ static int
 lsa_parse_common(const uchar_t *msg, const uchar_t *eom, uchar_t **cp,
     void *rr)
 {
-	uchar_t		namebuf[NS_MAXDNAME], *name;
+	uchar_t		namebuf[NS_MAXDNAME];
 	uint16_t	type, class, size;
 	uint32_t	ttl;
 	int		len;
@@ -226,11 +194,15 @@ lsa_parse_common(const uchar_t *msg, const uchar_t *eom, uchar_t **cp,
 	len = dn_expand(msg, eom, *cp, namebuf, sizeof (namebuf));
 	if (len < 0)
 		return P_ERR_FAIL;
-
 	
 	*cp += len;
-	if (**cp == 0xc0) /* we started on ptr, so we need to move 2 */
+
+	/* 
+	 * We started on a compressed name, so we need to adjust cp
+	 */
+	if (**cp == 0xc0) 
 		*cp += 2;
+
 	NS_GET16(type, *cp);
 	NS_GET16(class, *cp);
 	NS_GET32(ttl, *cp);
@@ -238,12 +210,6 @@ lsa_parse_common(const uchar_t *msg, const uchar_t *eom, uchar_t **cp,
 
 	if ((*cp + size) > eom)
 		return P_ERR_FAIL;
-	/*
-	if ((type != T_SRV) || (type != T_A) || (type != T_AAAA)) {
-		*cp += size;
-		return P_ERR_SKIP;
-	}
-	*/
 
 	if (type == T_SRV)
 		return lsa_parse_srv(msg, eom, cp, namebuf, sizeof(namebuf), (srv_rr_t *) rr);
@@ -252,7 +218,10 @@ lsa_parse_common(const uchar_t *msg, const uchar_t *eom, uchar_t **cp,
 	if (type == T_AAAA)
 		return lsa_parse_aaaa(msg, eom, cp, namebuf, (addr_rr_t *) rr);
 
-	/* If we get here, skip parsing the record entirely - we're not interested */
+	/* 
+	 * If we get here, skip parsing the record entirely;
+	 * we're not interested.
+	 */
 	*cp += size;
 	return P_ERR_SKIP;
 }
@@ -260,6 +229,7 @@ lsa_parse_common(const uchar_t *msg, const uchar_t *eom, uchar_t **cp,
 /*
  * Look up and return a sorted list of SRV records for a domain.
  * Returns number of records on success, -1 on failure.
+ * Also matches associated A records if returned, and gets them if not.
  */
 int
 lsa_srv_lookup(lsa_srv_ctx_t *ctx, const char *svcname, const char *dname)
@@ -273,6 +243,7 @@ lsa_srv_lookup(lsa_srv_ctx_t *ctx, const char *svcname, const char *dname)
 	uchar_t	*ap, *eom;
 	char	namebuf[NS_MAXDNAME];
 	list_t la;
+	srv_rr_t *sr;
 
 	list_create(&la, sizeof (addr_rr_t), offsetof(addr_rr_t, addr_node));
 
@@ -294,16 +265,6 @@ lsa_srv_lookup(lsa_srv_ctx_t *ctx, const char *svcname, const char *dname)
 	anslen = res_nquerydomain(&ctx->lsc_state, svcname, dname, C_IN, T_SRV,
 	    ap, sizeof (*ansbuf));
 
-	/*
-	char c = 0;
-	anslen = 0;
-		int i;
-	for(i = 0 ; i < 0x44 ; i++){
-	  c = getchar();
-	}
-	while((c = getchar()) != -1)
-	  ansbuf->b[anslen++] = c;
-	*/
 	if (anslen > sizeof (*ansbuf) || anslen <= (HFIXEDSZ + QFIXEDSZ))
 		goto out;
 
@@ -334,7 +295,7 @@ lsa_srv_lookup(lsa_srv_ctx_t *ctx, const char *svcname, const char *dname)
 	 * Expand names in answer(s) and insert into RR list.
 	 */
 	for (n = 0; (n < na) && (ap < eom); n++) {
-		srv_rr_t *sr = malloc(sizeof (srv_rr_t));
+		sr = malloc(sizeof (srv_rr_t));
 		if (sr == NULL) {
 			lsa_srvlist_destroy(&ctx->lsc_list);
 			goto out;
@@ -360,9 +321,6 @@ lsa_srv_lookup(lsa_srv_ctx_t *ctx, const char *svcname, const char *dname)
 	ret = n - skip;
 	if(ret == 0)
 		goto out;
-
-
-	srv_rr_t *sr;
 
 	for (n = 0; (n < (ns + nr)) && (ap < eom); n++) {
 	  	addr_rr_t *ar = malloc(sizeof (addr_rr_t));
@@ -397,8 +355,14 @@ lsa_srv_lookup(lsa_srv_ctx_t *ctx, const char *svcname, const char *dname)
 				AI_ADDRCONFIG | AI_V4MAPPED, AF_INET6,
 				0, 0, 0, NULL, NULL, NULL
 			};
-			if ((getaddrinfo(sr->sr_name, NULL, &ai, &res) != 0) || (res == NULL))
+			struct sockaddr_in6 sa;
+			if ((getaddrinfo(sr->sr_name, NULL, &ai, &res) != 0) || (res == NULL)) {
 				ret = -1;
+				goto out;
+			}
+			(void) memcpy(&sa, res->ai_addr, res->ai_addrlen);
+			sr->addr.sin6_addr = sa.sin6_addr;
+			freeaddrinfo(res);
 		}	    
 	}
 		  
@@ -434,7 +398,6 @@ lsa_srv_fini(lsa_srv_ctx_t *ctx)
 {
 	lsa_srvlist_destroy(&ctx->lsc_list);
 	list_destroy(&ctx->lsc_list);
-
 	res_ndestroy(&ctx->lsc_state);
 }
 
@@ -507,7 +470,7 @@ lsa_srv_next(lsa_srv_ctx_t *ctx, srv_rr_t *rr)
 	 * If all weights are 0, return first unused record.
 	 */
 
-	/* XXX this will always work until weight is supported */
+	/* XXX this will always trigger until weight is implemented */
 	if (sum == 0)
 		return (first);
 
@@ -544,4 +507,3 @@ lsa_srv_next(lsa_srv_ctx_t *ctx, srv_rr_t *rr)
 
 	return (sr);
 }
-

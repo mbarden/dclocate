@@ -1,25 +1,51 @@
+#include <stdlib.h>
+#include <unistd.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include <poll.h>
 #include <netdb.h>
 #include <ldap.h>
 #include <lber.h>
 #include <string.h>
+#include <sys/socket.h>
 #include "lsa_cldap.h"
 #include "lsa_srv.h"
-#include <stdio.h>
-#include <errno.h>
+
+static int
+lsa_bind()
+{
+        int                        fd;
+        struct sockaddr_in6         addr;
+
+        if ((fd = socket(PF_INET6, SOCK_DGRAM, 0)) < 0)
+                return (fd);
+        /*
+         * Bind to all available addresses and any port.
+         */
+        addr.sin6_family = AF_INET6;
+        addr.sin6_addr = in6addr_any;
+        addr.sin6_port = 0;
+
+        if (bind(fd, (struct sockaddr *)&addr, sizeof (addr)) < 0)
+                goto fail;
+
+        return (fd);
+fail:
+        (void) close(fd);
+
+        return (-1);
+}
 
 DOMAIN_CONTROLLER_INFO *
-dc_locate(const char *dname)
+dc_locate(const char *prefix, const char *dname)
 {
 
-	lsa_cldap_t *lc;
-	lsa_cldap_host_t *lch;
 	lsa_srv_ctx_t *ctx;
-	srv_rr_t *sr = NULL, *dc;
+	srv_rr_t *sr = NULL;
 	BerElement *pdu = NULL, *ret = NULL;
 	struct _berelement *be, *rbe;
  	DOMAIN_CONTROLLER_INFO *dci = NULL;
-	int r, msgid;
+	int r, fd;
 	struct sockaddr_storage addr;
 	struct sockaddr_in6 *paddr = (struct sockaddr_in6 *)&addr;
 	socklen_t addrlen;
@@ -29,83 +55,74 @@ dc_locate(const char *dname)
 	if (ctx == NULL)
 		goto fail;
 
-	r = lsa_srv_lookup(ctx, "_ldap._tcp.dc._msdcs", dname);
-	printf("%d\n", r);
+	r = lsa_srv_lookup(ctx, prefix, dname);
 	if (r <= 0) 
 		goto fail;
 
-
-	/* print */
-/*
-	   lsa_srvlist_sort(ctx);*/
-	/* error code? print */
-
-	lc = lsa_cldap_init();
+	if((fd = lsa_bind()) < 0)
+		goto fail;
 
 	if ((pdu = ber_alloc()) == NULL)
 		goto fail;
 	
-	r = lsa_cldap_setup_pdu(pdu, dname, NULL, NETLOGON_NT_VERSION_5EX); /* is ntver right? */
+	/* is ntver right? It certainly works on w2k8 */
+	r = lsa_cldap_setup_pdu(pdu, dname, NULL, NETLOGON_NT_VERSION_5EX); 
 
-	struct pollfd pingchk = {lc->lc_sock, POLLIN, 0};
+	struct pollfd pingchk = {fd, POLLIN, 0};
 
 	if ((dcaddr = malloc(INET6_ADDRSTRLEN + 2)) == NULL)
 		goto fail;
-
 	if ((dcname = malloc(MAXHOSTNAMELEN + 3)) == NULL)
 		goto fail;
 
 	be = (struct _berelement *)pdu;
 	while((sr = lsa_srv_next(ctx, sr)) != NULL) {
-		r = sendto(lc->lc_sock, be->ber_buf, (size_t)(be->ber_end - be->ber_buf),
-		       0, (struct sockaddr *)&sr->addr, sizeof(sr->addr));
-		printf("%d\n",r);
+		r = sendto(fd, be->ber_buf, (size_t)(be->ber_end - be->ber_buf),
+		        0, (struct sockaddr *)&sr->addr, sizeof(sr->addr));
 		if(poll(&pingchk, 1, 100) == 0)
 			continue;
+
 		if ((ret = ber_alloc()) == NULL)
-			goto fail;
-		
+			goto fail;		
 		rbe = (struct _berelement *)ret;
-		recvfrom(lc->lc_sock, rbe->ber_buf, 
-			 (size_t)(rbe->ber_end - rbe->ber_buf), 0, (struct sockaddr *)&addr, &addrlen);
+		recvfrom(fd, rbe->ber_buf, (size_t)(rbe->ber_end - rbe->ber_buf), 
+		    0, (struct sockaddr *)&addr, &addrlen);
 
 		if ((dci = malloc(sizeof (DOMAIN_CONTROLLER_INFO))) == NULL) {
 			ber_free(ret, 1);
 			goto fail;
 		}
 		dci->DomainControllerName = dcname;
-		if ((r = lsa_cldap_parse(ret, dci)) == 0)
-			break;
+
+		r = lsa_cldap_parse(ret, dci);
 		ber_free(ret, 1);
+		if (r == 0)
+			break;
 		if (r > 1)
 			goto fail;
 	}
 
 	if (sr == NULL)
-	  goto fail;
+		goto fail;
 
 	ber_free(pdu, 1);
 
 	if(strncpy(dcaddr, "\\\\", 2) == NULL)
 		goto fail;
 
-	
-	/*sr->addr isn't guaranteed to be correct - get it from elsewhere*/
 	inet_ntop(paddr->sin6_family, &paddr->sin6_addr, dcaddr+2, INET6_ADDRSTRLEN);
-	/*inet_ntop(sr->addr.sin6_family, &sr->addr.sin6_addr, dcaddr+2, INET6_ADDRSTRLEN);*/
 	dci->DomainControllerAddress = dcaddr;
 	dci->DomainControllerAddressType = DS_INET_ADDRESS;
 
-
 	lsa_srv_fini(ctx);
-	lsa_cldap_fini(lc);
+	close(fd);
 	return (dci);
 
  fail:
 	if (ctx)
 		lsa_srv_fini(ctx);
-	if (lc)
-		lsa_cldap_fini(lc);
+	if (fd >= 0)
+		close(fd);
 	if (dcaddr)
 		free(dcaddr);
 	if (dcname)
