@@ -1,0 +1,36 @@
+Note: I added ldap_put_filter to the mapfile in libldap5 (modded mapfile included in ldap5/)
+
+
+all of my tests were done against w2k8
+
+tested locators:
+
+_ldap._tcp.pdc._msdcs.<DnsDomainName>
+_ldap._tcp.<SiteName>._sites.gc._msdcs.<DnsForestName>
+_ldap._tcp.gc._msdcs.<DnsForestName>
+_kerberos._tcp.<SiteName>._sites.dc._msdcs.<DnsForestName>
+_kerberos._tcp.dc._msdcs.<DnsForestName>
+_ldap._tcp.<SiteName>._sites.<DnsDomainName>
+_ldap._tcp.<DnsDomainName>
+_ldap._tcp.<SiteName>._sites.dc._msdcs.<DnsDomainName>
+_ldap._tcp.dc._msdcs.<DnsDomainName>
+_ldap._tcp.<DomainGuid>.domains._msdcs.<DnsForestName>
+
+all succeeded and returned:
+
+"DomainControllerName: \\w2k8r2dc.w2k8.ma.nexenta.com
+DomainControllerAddress: \\::ffff:10.10.0.88
+DomainControllerAddressType: 1
+DomainGuid: 6d2b27b1-c20-4c6c-81ac-899a3c80cd51
+DomainName: w2k8.ma.nexenta.com
+DnsForestName: w2k8.ma.nexenta.com
+Flags: 0x33fd
+DcSiteName: Default-First-Site-Name
+ClientSiteName: Default-First-Site-Name"
+
+(Guid used: "6d2b27b1-0c20-4c6c-81ac-899a3c80cd51")
+(SiteName used: "Default-First-Site-Name")
+
+./a.out <prefix> <DomainName>
+
+- concatenated into "prefix.DomainName"

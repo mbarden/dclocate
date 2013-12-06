@@ -29,14 +29,6 @@
 #include <ldap.h>
 #include "lsa_srv.h"
 
-/*
-static int
-lsa_srvsr_compare(srv_rr_t *ar, srv_rr_t *br)
-{
-  return (ar->sr_priority < br->sr_priority);
-}
-*/
-
 static void
 lsa_srvlist_insert(list_t *l, srv_rr_t *rr)
 {
@@ -64,6 +56,7 @@ lsa_addrlist_destroy(list_t *l)
 		free(ar->name);
 		free(ar->addr);
 		list_remove_head(l);
+		free(ar);
 	}
 }
 
@@ -75,6 +68,7 @@ lsa_srvlist_destroy(list_t *l)
 	for (sr = list_head(l); sr != NULL; sr = list_head(l)) {
 		free(sr->sr_name);
 		list_remove_head(l);
+		free(sr);
 	}
 }
 
@@ -129,12 +123,13 @@ lsa_parse_a(const uchar_t *msg, const uchar_t *eom, uchar_t **cp,
 {
 	int i;
 	uint8_t *addr6 = NULL;
-	
-	if ((ar->name = strdup(namebuf)) == NULL)
-		return P_ERR_FAIL;
-	
-	if ((addr6 = malloc(sizeof (in6_addr_t))) == NULL)
-		return P_ERR_FAIL;
+	char *name = NULL;
+
+	if ((name = strdup(namebuf)) == NULL)
+		goto fail;	
+
+	if ((addr6 = malloc(sizeof (in6_addr_t))) == NULL) 
+		goto fail;
 	memset(addr6, 0, 10);
 
 	*(addr6+10) = (uint8_t) 0xff;
@@ -142,14 +137,17 @@ lsa_parse_a(const uchar_t *msg, const uchar_t *eom, uchar_t **cp,
 	for(i = 0; i < 4; i++)
 		*(addr6+12+i) = (uint8_t) *(*cp)++;
 
-	if (*cp > eom) {
-		free(addr6);
-		return P_ERR_FAIL;
-	}
+	if (*cp > eom)
+		goto fail;
 
 	ar->addr = (in6_addr_t *)addr6;
-
+	ar->name = name;
 	return P_SUCCESS;
+
+ fail:
+	free(addr6);
+	free(name);
+	return P_ERR_FAIL;
 } 
 
 static int
@@ -158,25 +156,30 @@ lsa_parse_aaaa(const uchar_t *msg, const uchar_t *eom, uchar_t **cp,
 {
 	int i;
 	uint16_t *addr6 = NULL;
-	
-	if ((ar->name = strdup(namebuf)) == NULL)
-		return P_ERR_FAIL;
+	char *name = NULL;
+
+	if ((name = strdup(namebuf)) == NULL)
+		goto fail;
 	
 	if ((addr6 = malloc(sizeof (in6_addr_t))) == NULL)
-		return P_ERR_FAIL;
+		goto fail;
 	
 	for (i = 0; i < 8; i++) {
 		addr6[i] = *(uint16_t *)*cp;
 		*cp += 2;
 	}
 	
-	if (*cp > eom) {
-		free(addr6);
-		return P_ERR_FAIL;
-	}
+	if (*cp > eom)
+		goto fail;
 	
 	ar->addr = (in6_addr_t *)addr6;
+	ar->name = name;
 	return P_SUCCESS;
+
+ fail:
+	free(addr6);
+	free(name);
+	return P_ERR_FAIL;
 } 
 
 static int
@@ -335,12 +338,12 @@ lsa_srv_lookup(lsa_srv_ctx_t *ctx, const char *svcname, const char *dname)
 		if (e == P_ERR_SKIP) {
 			free(ar);
 			continue;
-			goto out;
 		}
 		list_insert_tail(&la, ar);
 	}
 	
-	for (sr = list_head(&ctx->lsc_list); sr != NULL; sr = list_next(&ctx->lsc_list, sr)) {
+	for (sr = list_head(&ctx->lsc_list); sr != NULL;
+	     sr = list_next(&ctx->lsc_list, sr)) {
 		addr_rr_t *ar = NULL;
 		sr->addr.sin6_family = AF_INET6;
 		sr->addr.sin6_port = htons(LDAP_PORT);
@@ -356,7 +359,8 @@ lsa_srv_lookup(lsa_srv_ctx_t *ctx, const char *svcname, const char *dname)
 				0, 0, 0, NULL, NULL, NULL
 			};
 			struct sockaddr_in6 sa;
-			if ((getaddrinfo(sr->sr_name, NULL, &ai, &res) != 0) || (res == NULL)) {
+			if ((getaddrinfo(sr->sr_name, NULL, &ai, &res) != 0)
+			    || (res == NULL)) {
 				ret = -1;
 				goto out;
 			}
@@ -382,6 +386,7 @@ lsa_srv_init(void)
 	if (ctx == NULL)
 		return (NULL);
 
+	memset(&ctx->lsc_state, 0, sizeof(ctx->lsc_state));
 	if (res_ninit(&ctx->lsc_state) != 0) {
 		free(ctx);
 		return (NULL);
@@ -396,9 +401,12 @@ lsa_srv_init(void)
 void
 lsa_srv_fini(lsa_srv_ctx_t *ctx)
 {
+  	if (ctx == NULL)
+  		return;
 	lsa_srvlist_destroy(&ctx->lsc_list);
 	list_destroy(&ctx->lsc_list);
 	res_ndestroy(&ctx->lsc_state);
+	free(ctx);
 }
 
 static void

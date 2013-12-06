@@ -71,7 +71,7 @@ lsa_cldap_setup_pdu(BerElement *ber, const char *dname,
     const char *host, uint32_t ntver)
 {
 	int		ret = 0, len = 0, msgid;
-	char		*ldapdn = "", *basedn = "";
+	char		*basedn = "";
 	int scope = LDAP_SCOPE_BASE, deref = LDAP_DEREF_NEVER,
 	    sizelimit = 0, timelimit = 0, attrsonly = 0;
 	char		filter[MAXHOSTNAMELEN]; 
@@ -129,8 +129,6 @@ lsa_cldap_setup_pdu(BerElement *ber, const char *dname,
 	/* Success */
 	ret = msgid;
 fail:
-	if (ldapdn != NULL)
-		free(ldapdn);
 	if (ret < 0)
 		ber_free(ber, 1);
 	return (ret);
@@ -207,7 +205,7 @@ lsa_cldap_parse(BerElement *ber, DOMAIN_CONTROLLER_INFO *dci)
 
 	for(base = cp; ((cp - base) < l) && (f <= LM_20_TOKEN); f++) {
 	  
-	 	memset(val, 0, sizeof (val));
+		val[0] = '\0';
 	  	switch(f) {
 		case OPCODE:
 			opcode = *(uint16_t *)cp;
@@ -240,7 +238,7 @@ lsa_cldap_parse(BerElement *ber, DOMAIN_CONTROLLER_INFO *dci)
 			break;
 		case DNS_HOST_NAME:
 			cp += lsa_decode_name(base, cp, val);
-			if (((strncpy(dci->DomainControllerName, "\\\\", 2)) == NULL) ||
+			if (((strncpy(dci->DomainControllerName, "\\\\", 3)) == NULL) ||
 			    (strcat(dci->DomainControllerName, val) == NULL)) {
 				rc = 2;
 				goto out;
@@ -292,4 +290,18 @@ lsa_cldap_parse(BerElement *ber, DOMAIN_CONTROLLER_INFO *dci)
 	else if (cp)
 		free(cp);
 	return (rc);
+}
+
+void
+freedci(DOMAIN_CONTROLLER_INFO *dci)
+{
+	if (dci == NULL)
+		return;
+	free(dci->DomainControllerName);
+	free(dci->DomainControllerAddress);
+	free(dci->DomainName);
+	free(dci->DnsForestName);
+	free(dci->DcSiteName);
+	free(dci->ClientSiteName);
+	free(dci);
 }

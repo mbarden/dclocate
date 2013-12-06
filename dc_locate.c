@@ -36,18 +36,20 @@ fail:
         return (-1);
 }
 
+void
+lsa_srv_output(lsa_srv_ctx_t *ctx) __attribute__((weak));
+
 DOMAIN_CONTROLLER_INFO *
 dc_locate(const char *prefix, const char *dname)
 {
-
 	lsa_srv_ctx_t *ctx;
-	srv_rr_t *sr = NULL;
-	BerElement *pdu = NULL, *ret = NULL;
+	srv_rr_t *sr;
+	BerElement *pdu = NULL, *ret;
 	struct _berelement *be, *rbe;
  	DOMAIN_CONTROLLER_INFO *dci = NULL;
-	int r, fd;
+	int r, fd = -1;
 	struct sockaddr_storage addr;
-	struct sockaddr_in6 *paddr = (struct sockaddr_in6 *)&addr;
+	struct sockaddr_in6 *paddr;
 	socklen_t addrlen;
 	char *dcaddr = NULL, *dcname = NULL;
 
@@ -58,6 +60,9 @@ dc_locate(const char *prefix, const char *dname)
 	r = lsa_srv_lookup(ctx, prefix, dname);
 	if (r <= 0) 
 		goto fail;
+
+	if (lsa_srv_output)
+		lsa_srv_output(ctx);
 
 	if((fd = lsa_bind()) < 0)
 		goto fail;
@@ -72,10 +77,13 @@ dc_locate(const char *prefix, const char *dname)
 
 	if ((dcaddr = malloc(INET6_ADDRSTRLEN + 2)) == NULL)
 		goto fail;
+	if (strncpy(dcaddr, "\\\\", 3) == NULL)
+		goto fail;
 	if ((dcname = malloc(MAXHOSTNAMELEN + 3)) == NULL)
 		goto fail;
 
 	be = (struct _berelement *)pdu;
+	sr = NULL;
 	while((sr = lsa_srv_next(ctx, sr)) != NULL) {
 		r = sendto(fd, be->ber_buf, (size_t)(be->ber_end - be->ber_buf),
 		        0, (struct sockaddr *)&sr->addr, sizeof(sr->addr));
@@ -105,30 +113,25 @@ dc_locate(const char *prefix, const char *dname)
 	if (sr == NULL)
 		goto fail;
 
-	ber_free(pdu, 1);
-
-	if(strncpy(dcaddr, "\\\\", 2) == NULL)
-		goto fail;
-
+	paddr = (struct sockaddr_in6 *)&addr;
 	inet_ntop(paddr->sin6_family, &paddr->sin6_addr, dcaddr+2, INET6_ADDRSTRLEN);
 	dci->DomainControllerAddress = dcaddr;
 	dci->DomainControllerAddressType = DS_INET_ADDRESS;
 
+	ber_free(pdu, 1);
 	lsa_srv_fini(ctx);
 	close(fd);
 	return (dci);
 
  fail:
-	if (ctx)
-		lsa_srv_fini(ctx);
+	lsa_srv_fini(ctx);
+	if (dci)
+		freedci(dci);
+	else
+		free(dcname);
+	free(dcaddr);
+	ber_free(pdu, 1);
 	if (fd >= 0)
 		close(fd);
-	if (dcaddr)
-		free(dcaddr);
-	if (dcname)
-		free(dcname);
-	if (pdu)
-		ber_free(pdu, 1);
-
 	return (NULL);
 }

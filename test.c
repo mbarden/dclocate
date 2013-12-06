@@ -2,6 +2,7 @@
 #include <resolv.h>
 #include <netinet/in.h>
 #include <arpa/nameser.h>
+#include <string.h>
 #include <stdio.h>
 #include <netdb.h>
 #include "lsa_cldap.h"
@@ -16,6 +17,7 @@ int main(int argc, char *argv[]){
     return 1;
   }
 
+  memset(dci, 0, sizeof(*dci));
   BerElement *ret = ber_alloc();
   struct _berelement *re = ret;
   char c = 0;
@@ -52,6 +54,8 @@ int main(int argc, char *argv[]){
   printf("DcSiteName: %s\n", dci->DcSiteName);
   printf("ClientSiteName: %s\n", dci->ClientSiteName);
   
+  ber_free(ret, 1);
+  freedci(dci);
   /*  
   in6_addr_t t;
   int i;
@@ -75,6 +79,6 @@ int main(int argc, char *argv[]){
   for(i = 0 ; i < 4 ; i++)
     printf("0x%x %x\n", p+i, (p[i] && 0xff));
   */
-
+  while(1);
   return 0;
 }

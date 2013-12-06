@@ -86,9 +86,10 @@ typedef enum {
 	LM_20_TOKEN
 } field_5ex_t;
 
-int lsa_cldap_setup_pdu(BerElement *ber, const char *dname, 
-    const char *host, uint32_t ntver);
+int lsa_cldap_setup_pdu(BerElement *, const char *, 
+    const char *, uint32_t);
 
 int lsa_cldap_parse(BerElement *, DOMAIN_CONTROLLER_INFO *);
 
+void freedci(DOMAIN_CONTROLLER_INFO *);
 #endif /* _LSA_CLDAP_H */
