@@ -30,7 +30,7 @@ lsa_cldap_escape_le64(char *buf, uint64_t val, int bytes)
 
 	while (bytes != 0) {
 		p += sprintf(p, "\\%.2" PRIx8, (uint8_t)(val & 0xff));
-		val >>= 1;
+		val >>= 8;
 		bytes--;
 	}
 
@@ -126,7 +126,9 @@ lsa_cldap_setup_pdu(BerElement *ber, const char *dname,
 	if (ber_printf(ber, "{s}}}", NETLOGON_ATTR_NAME) < 0)
 		goto fail;
 
-	/* Success */
+	/* 
+	 * Success
+	 */
 	ret = msgid;
 fail:
 	if (ret < 0)
@@ -178,13 +180,12 @@ lsa_decode_name(uchar_t *base, uchar_t *cp, char *str)
 		*str++ = '.';
 	}
 	if (cp != st)
-		*(str-1) = 0;
+		*(str-1) = '\0';
 	else
-		*str = 0;
+		*str = '\0';
 	
 	return ((tmp == NULL ? cp+1 : tmp) - st);
 }
-
 
 int
 lsa_cldap_parse(BerElement *ber, DOMAIN_CONTROLLER_INFO *dci)
@@ -196,15 +197,16 @@ lsa_cldap_parse(BerElement *ber, DOMAIN_CONTROLLER_INFO *dci)
 	uint8_t *gid = dci->DomainGuid;
 	field_5ex_t f = OPCODE;
 	
-	/* later, compare msgid's/some validation? */
+	/* 
+	 * Later, compare msgid's/some validation?
+	 */
 
 	if (ber_scanf(ber, "{i{x{{x[la", &msgid, &l, &cp) == LBER_ERROR) {
 		rc = 1;
 		goto out;
 	}
 
-	for(base = cp; ((cp - base) < l) && (f <= LM_20_TOKEN); f++) {
-	  
+	for (base = cp; ((cp - base) < l) && (f <= LM_20_TOKEN); f++) {	  
 		val[0] = '\0';
 	  	switch(f) {
 		case OPCODE:
@@ -238,20 +240,30 @@ lsa_cldap_parse(BerElement *ber, DOMAIN_CONTROLLER_INFO *dci)
 			break;
 		case DNS_HOST_NAME:
 			cp += lsa_decode_name(base, cp, val);
-			if (((strncpy(dci->DomainControllerName, "\\\\", 3)) == NULL) ||
-			    (strcat(dci->DomainControllerName, val) == NULL)) {
+			if (((strncpy(dci->DomainControllerName, "\\\\", 
+			    3)) == NULL) || (strcat(dci->DomainControllerName, 
+				val) == NULL)) {
 				rc = 2;
 				goto out;
 			}
 			break;
 		case NET_DOMAIN_NAME:
-			cp += lsa_decode_name(base, cp, val); /* DCI doesn't seem to use this */
+			/* 
+			 * DCI doesn't seem to use this
+			 */
+			cp += lsa_decode_name(base, cp, val); 
 			break;
 		case NET_COMP_NAME:
-			cp += lsa_decode_name(base, cp, val); /* DCI doesn't seem to use this */
+			/* 
+			 * DCI doesn't seem to use this
+			 */
+			cp += lsa_decode_name(base, cp, val); 
 			break;
 		case USER_NAME:
-			cp += lsa_decode_name(base, cp, val); /* DCI doesn't seem to use this */
+			/* 
+			 * DCI doesn't seem to use this
+			 */
+			cp += lsa_decode_name(base, cp, val);
 			break;
 		case DC_SITE_NAME:
 			cp += lsa_decode_name(base, cp, val);
@@ -262,7 +274,8 @@ lsa_cldap_parse(BerElement *ber, DOMAIN_CONTROLLER_INFO *dci)
 			break;
 		case CLIENT_SITE_NAME:
 			cp += lsa_decode_name(base, cp, val);
-			if (((dci->ClientSiteName = strdup(val)) == NULL) && (val[0] != '\0')) {
+			if (((dci->ClientSiteName = strdup(val)) == NULL) && 
+			    (val[0] != '\0')) {
 				rc = 2;
 				goto out;
 			}

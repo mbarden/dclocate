@@ -79,7 +79,7 @@ lsa_srvlist_destroy(list_t *l)
 
 static int
 lsa_parse_srv(const uchar_t *msg, const uchar_t *eom, uchar_t **cp,
-	      uchar_t *namebuf, size_t bufsize, srv_rr_t *sr)
+    uchar_t *namebuf, size_t bufsize, srv_rr_t *sr)
 {
 	/*
 	 * Get priority, weight, port, and target name.
@@ -119,16 +119,19 @@ lsa_parse_srv(const uchar_t *msg, const uchar_t *eom, uchar_t **cp,
 
 static int
 lsa_parse_a(const uchar_t *msg, const uchar_t *eom, uchar_t **cp,
-	    uchar_t *namebuf, addr_rr_t *ar)
+    uchar_t *namebuf, addr_rr_t *ar)
 {
 	int i;
-	uint8_t *addr6 = NULL;
+	union v6buf_u {
+	  uint8_t bytes[16];
+	  in6_addr_t addr;
+	} *addr6 = NULL;
 	char *name = NULL;
 
 	if ((name = strdup(namebuf)) == NULL)
 		goto fail;	
 
-	if ((addr6 = malloc(sizeof (in6_addr_t))) == NULL) 
+	if ((addr6 = malloc(sizeof (*addr6))) == NULL) 
 		goto fail;
 	memset(addr6, 0, 10);
 
@@ -152,7 +155,7 @@ lsa_parse_a(const uchar_t *msg, const uchar_t *eom, uchar_t **cp,
 
 static int
 lsa_parse_aaaa(const uchar_t *msg, const uchar_t *eom, uchar_t **cp,
-	       uchar_t *namebuf, addr_rr_t *ar)
+    uchar_t *namebuf, addr_rr_t *ar)
 {
 	int i;
 	uint16_t *addr6 = NULL;
@@ -215,7 +218,8 @@ lsa_parse_common(const uchar_t *msg, const uchar_t *eom, uchar_t **cp,
 		return P_ERR_FAIL;
 
 	if (type == T_SRV)
-		return lsa_parse_srv(msg, eom, cp, namebuf, sizeof(namebuf), (srv_rr_t *) rr);
+		return lsa_parse_srv(msg, eom, cp, namebuf, sizeof(namebuf), 
+		    (srv_rr_t *) rr);
 	if (type == T_A)
 		return lsa_parse_a(msg, eom, cp, namebuf, (addr_rr_t *) rr);
 	if (type == T_AAAA)
@@ -322,7 +326,7 @@ lsa_srv_lookup(lsa_srv_ctx_t *ctx, const char *svcname, const char *dname)
 
 	/* Return number of records found. */
 	ret = n - skip;
-	if(ret == 0)
+	if (ret == 0)
 		goto out;
 
 	for (n = 0; (n < (ns + nr)) && (ap < eom); n++) {

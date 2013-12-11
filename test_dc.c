@@ -25,7 +25,9 @@ lsa_srv_output(lsa_srv_ctx_t *ctx)
 	printf("\n");
 }
 
-int main(int argc, char *argv[]) {
+int 
+main(int argc, char *argv[])
+{
   	DOMAIN_CONTROLLER_INFO *dci;
 	int i;
 	

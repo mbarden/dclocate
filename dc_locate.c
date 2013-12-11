@@ -64,13 +64,16 @@ dc_locate(const char *prefix, const char *dname)
 	if (lsa_srv_output)
 		lsa_srv_output(ctx);
 
-	if((fd = lsa_bind()) < 0)
+	if ((fd = lsa_bind()) < 0)
 		goto fail;
 
 	if ((pdu = ber_alloc()) == NULL)
 		goto fail;
 	
-	/* is ntver right? It certainly works on w2k8 */
+	/* 
+	 * Is ntver right? It certainly works on w2k8... If others are needed,
+	 * that might require changes to lsa_cldap_parse
+	 */
 	r = lsa_cldap_setup_pdu(pdu, dname, NULL, NETLOGON_NT_VERSION_5EX); 
 
 	struct pollfd pingchk = {fd, POLLIN, 0};
@@ -84,10 +87,10 @@ dc_locate(const char *prefix, const char *dname)
 
 	be = (struct _berelement *)pdu;
 	sr = NULL;
-	while((sr = lsa_srv_next(ctx, sr)) != NULL) {
+	while ((sr = lsa_srv_next(ctx, sr)) != NULL) {
 		r = sendto(fd, be->ber_buf, (size_t)(be->ber_end - be->ber_buf),
-		        0, (struct sockaddr *)&sr->addr, sizeof(sr->addr));
-		if(poll(&pingchk, 1, 100) == 0)
+		    0, (struct sockaddr *)&sr->addr, sizeof(sr->addr));
+		if (poll(&pingchk, 1, 100) == 0)
 			continue;
 
 		if ((ret = ber_alloc()) == NULL)
@@ -114,7 +117,8 @@ dc_locate(const char *prefix, const char *dname)
 		goto fail;
 
 	paddr = (struct sockaddr_in6 *)&addr;
-	inet_ntop(paddr->sin6_family, &paddr->sin6_addr, dcaddr+2, INET6_ADDRSTRLEN);
+	inet_ntop(paddr->sin6_family, &paddr->sin6_addr, dcaddr+2, 
+	    INET6_ADDRSTRLEN);
 	dci->DomainControllerAddress = dcaddr;
 	dci->DomainControllerAddressType = DS_INET_ADDRESS;
 
