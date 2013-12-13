@@ -121,11 +121,8 @@ static int
 lsa_parse_a(const uchar_t *msg, const uchar_t *eom, uchar_t **cp,
     uchar_t *namebuf, addr_rr_t *ar)
 {
-	int i;
-	union v6buf_u {
-	  uint8_t bytes[16];
-	  in6_addr_t addr;
-	} *addr6 = NULL;
+
+	in6_addr_t *addr6 = NULL;
 	char *name = NULL;
 
 	if ((name = strdup(namebuf)) == NULL)
@@ -135,16 +132,18 @@ lsa_parse_a(const uchar_t *msg, const uchar_t *eom, uchar_t **cp,
 		goto fail;
 	memset(addr6, 0, 10);
 
-	*(addr6+10) = (uint8_t) 0xff;
-	*(addr6+11) = (uint8_t) 0xff;
-	for(i = 0; i < 4; i++)
-		*(addr6+12+i) = (uint8_t) *(*cp)++;
 
+	addr6->s6_addr8[10] = (uint8_t) 0xff;
+	addr6->s6_addr8[11] = (uint8_t) 0xff;
+	addr6->s6_addr32[3] = *(uint32_t *)*cp;
+
+	*cp += 4;
 	if (*cp > eom)
 		goto fail;
 
-	ar->addr = (in6_addr_t *)addr6;
+	ar->addr = addr6;
 	ar->name = name;
+	ar->type = AF_INET;
 	return P_SUCCESS;
 
  fail:
@@ -158,25 +157,27 @@ lsa_parse_aaaa(const uchar_t *msg, const uchar_t *eom, uchar_t **cp,
     uchar_t *namebuf, addr_rr_t *ar)
 {
 	int i;
-	uint16_t *addr6 = NULL;
+	in6_addr_t *addr6 = NULL;
 	char *name = NULL;
 
 	if ((name = strdup(namebuf)) == NULL)
 		goto fail;
 	
-	if ((addr6 = malloc(sizeof (in6_addr_t))) == NULL)
+	if ((addr6 = malloc(sizeof (*addr6))) == NULL)
 		goto fail;
 	
-	for (i = 0; i < 8; i++) {
-		addr6[i] = *(uint16_t *)*cp;
-		*cp += 2;
+	for (i = 0; i < 4; i++) {
+		addr6->s6_addr32[i] = *(uint32_t *)*cp;
+		*cp += 4;
 	}
 	
+
 	if (*cp > eom)
 		goto fail;
 	
-	ar->addr = (in6_addr_t *)addr6;
+	ar->addr = addr6;
 	ar->name = name;
+	ar->type = AF_INET6;
 	return P_SUCCESS;
 
  fail:
@@ -343,7 +344,17 @@ lsa_srv_lookup(lsa_srv_ctx_t *ctx, const char *svcname, const char *dname)
 			free(ar);
 			continue;
 		}
-		list_insert_tail(&la, ar);
+		/* 
+		 * Do we care about using IPv6 if its available, or
+		 * should we only use it if it's the only one available?
+		 * This is currently set up to "fall back" to v4-mapped IPv6 if
+		 * pure IPv6 wasn't provided.
+		 */
+		
+		if (ar->type == AF_INET)
+			list_insert_tail(&la, ar);
+		else
+			list_insert_head(&la, ar);
 	}
 	
 	for (sr = list_head(&ctx->lsc_list); sr != NULL;

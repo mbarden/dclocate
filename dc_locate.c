@@ -124,7 +124,7 @@ dc_locate(const char *prefix, const char *dname)
 
 	ber_free(pdu, 1);
 	lsa_srv_fini(ctx);
-	close(fd);
+	(void) close(fd);
 	return (dci);
 
  fail:
@@ -136,6 +136,6 @@ dc_locate(const char *prefix, const char *dname)
 	free(dcaddr);
 	ber_free(pdu, 1);
 	if (fd >= 0)
-		close(fd);
+		(void) close(fd);
 	return (NULL);
 }

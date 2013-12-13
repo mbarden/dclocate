@@ -19,6 +19,9 @@
 #include <sys/list.h>
 #include <resolv.h>
 
+#define	s6_addr8	_S6_un._S6_u8
+#define	s6_addr32	_S6_un._S6_u32
+
 #define P_SUCCESS 0
 #define P_ERR_SKIP 1 /* ignored a record - continue parsing */
 #define P_ERR_FAIL -1 /* parsing failed */
@@ -28,6 +31,7 @@ typedef struct addr_rr
 	list_node_t	addr_node;
 	char		*name;
 	in6_addr_t	*addr;
+	int		type;
 } addr_rr_t;
 
 typedef struct srv_rr
