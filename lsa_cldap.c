@@ -212,6 +212,10 @@ lsa_cldap_parse(BerElement *ber, DOMAIN_CONTROLLER_INFO *dci)
 		case OPCODE:
 			opcode = *(uint16_t *)cp;
 			cp +=2;
+		  /* If there really is an alignment issue, when can do this
+			opcode = *cp++;
+			opcode |= (*cp++ << 8);
+			*/
 			break;
 		case SBZ:
 			cp +=2;
@@ -219,6 +223,11 @@ lsa_cldap_parse(BerElement *ber, DOMAIN_CONTROLLER_INFO *dci)
 		case FLAGS:
 			dci->Flags = *(uint32_t *)cp;
 			cp +=4;
+		  /* If there really is an alignment issue, when can do this
+			dci->Flags = *cp++;
+			for(i = 1; i < 4; i++)
+				dci->Flags |= (*cp++ << 8*i);
+		  */
 			break;
 		case DOMAIN_GUID:
 			for (i = 0; i < 16; i++)

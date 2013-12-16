@@ -124,20 +124,24 @@ lsa_parse_a(const uchar_t *msg, const uchar_t *eom, uchar_t **cp,
 
 	in6_addr_t *addr6 = NULL;
 	char *name = NULL;
+	int i;
 
 	if ((name = strdup(namebuf)) == NULL)
 		goto fail;	
 
 	if ((addr6 = malloc(sizeof (*addr6))) == NULL) 
 		goto fail;
-	memset(addr6, 0, 10);
 
-
-	addr6->s6_addr8[10] = (uint8_t) 0xff;
-	addr6->s6_addr8[11] = (uint8_t) 0xff;
+	addr6->s6_addr32[1] = addr6->s6_addr32[0] = 0;
+	addr6->s6_addr32[2] = 0xffff0000;
+	/*
 	addr6->s6_addr32[3] = *(uint32_t *)*cp;
-
 	*cp += 4;
+	*/
+	
+	for (i = 12; i < 16; i++)
+	  addr6->s6_addr8[i] = *(*cp)++;
+	
 	if (*cp > eom)
 		goto fail;
 
@@ -165,13 +169,17 @@ lsa_parse_aaaa(const uchar_t *msg, const uchar_t *eom, uchar_t **cp,
 	
 	if ((addr6 = malloc(sizeof (*addr6))) == NULL)
 		goto fail;
-	
+
+	/*	
 	for (i = 0; i < 4; i++) {
 		addr6->s6_addr32[i] = *(uint32_t *)*cp;
 		*cp += 4;
 	}
+	*/
 	
-
+	for (i = 0; i < 16; i++)
+	  addr6->s6_addr8[i] = *(*cp)++;
+	
 	if (*cp > eom)
 		goto fail;
 	
@@ -336,7 +344,6 @@ lsa_srv_lookup(lsa_srv_ctx_t *ctx, const char *svcname, const char *dname)
 			goto out;
 
 		memset(ar, 0, sizeof (*ar));
-
 		e = lsa_parse_common(ansbuf->b, eom, &ap, ar);
 		if (e == P_ERR_FAIL)
 			goto out;
@@ -347,8 +354,8 @@ lsa_srv_lookup(lsa_srv_ctx_t *ctx, const char *svcname, const char *dname)
 		/* 
 		 * Do we care about using IPv6 if its available, or
 		 * should we only use it if it's the only one available?
-		 * This is currently set up to "fall back" to v4-mapped IPv6 if
-		 * pure IPv6 wasn't provided.
+		 * This currently sets up the next loop to "fall back" to 
+		 * v4-mapped IPv6 if pure IPv6 wasn't provided.
 		 */
 		
 		if (ar->type == AF_INET)
